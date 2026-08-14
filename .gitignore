@@ -179,3 +179,7 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+# pl_predict: downloaded data and generated outputs
+data/
+output/
+site/
