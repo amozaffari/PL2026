@@ -29,6 +29,9 @@ def cmd_backtest(args):
 def cmd_simulate(args):
     from .simulate import build_context, simulate_season
 
+    if args.market_implied and args.squad_adjust:
+        raise SystemExit("--market-implied and --squad-adjust must not be combined: "
+                         "the market already prices transfers in.")
     ctx = build_context()
     offsets = None
     suffix = ""
@@ -38,6 +41,14 @@ def cmd_simulate(args):
         print("calibrating Elo offsets against the Polymarket title market...")
         offsets = market_implied_offsets(ctx)
         suffix = "_market_implied"
+    elif args.squad_adjust:
+        from .data_sources.squads import squad_elo_offsets
+
+        offsets = squad_elo_offsets()
+        suffix = "_squad_adjusted"
+        shown = {t: round(o) for t, o in sorted(offsets.items(), key=lambda x: -x[1])
+                 if abs(o) >= 1}
+        print(f"transfer-window Elo offsets: {shown}")
 
     match_probs, table = simulate_season(n_sims=args.sims, ctx=ctx,
                                          elo_offsets=offsets)
@@ -54,7 +65,19 @@ def cmd_predict(args):
     from .data_sources.weather import kickoff_weather
     from .simulate import match_probabilities
 
-    fixtures, _, _ = match_probabilities()
+    offsets = None
+    if not args.raw:
+        from .data_sources.squads import injury_elo_penalties, squad_elo_offsets
+
+        transfers = squad_elo_offsets()
+        injuries = injury_elo_penalties()
+        offsets = {t: transfers.get(t, 0.0) + injuries.get(t, 0.0)
+                   for t in set(transfers) | set(injuries)}
+        notable = {t: round(o) for t, o in sorted(offsets.items(), key=lambda x: x[1])
+                   if abs(o) >= 10}
+        print(f"squad adjustments applied (transfers + current injuries), "
+              f"largest: {notable}  [--raw to disable]")
+    fixtures, _, _ = match_probabilities(elo_offsets=offsets)
     upcoming = fixtures[~fixtures["finished"]]
     gw = args.gameweek or int(upcoming["gameweek"].min())
     sel = upcoming[upcoming["gameweek"] == gw].copy()
@@ -79,6 +102,20 @@ def cmd_predict(args):
         cols += ["book_H", "book_D", "book_A", "blend_H", "blend_D", "blend_A"]
     with pd.option_context("display.float_format", lambda v: f"{v:.2f}"):
         print(f"Gameweek {gw}\n" + sel[cols].to_string(index=False))
+
+
+def cmd_history(args):
+    from .history import scoreboard, snapshot_projection, update_match_log
+
+    took = snapshot_projection()
+    print("projection snapshot:", "written" if took else "already have one this week")
+    log = update_match_log()
+    frozen = log[log["outcome"].notna()]
+    print(f"match log: {len(log)} fixtures tracked, {len(frozen)} with results")
+    board = scoreboard(log)
+    if board:
+        print(f"scoreboard: n={board['n']} accuracy={board['accuracy']:.3f} "
+              f"log_loss={board['log_loss']:.3f} brier={board['brier']:.3f}")
 
 
 def cmd_markets(args):
@@ -144,11 +181,18 @@ def main():
     p.add_argument("--sims", type=int, default=10_000)
     p.add_argument("--market-implied", action="store_true",
                    help="calibrate Elo against the Polymarket title market first")
+    p.add_argument("--squad-adjust", action="store_true",
+                   help="apply transfer-window Elo offsets (market-free alternative)")
     p.set_defaults(func=cmd_simulate)
 
     p = sub.add_parser("predict", help="probabilities + weather for a gameweek")
     p.add_argument("--gameweek", type=int, default=None)
+    p.add_argument("--raw", action="store_true",
+                   help="skip transfer/injury squad adjustments")
     p.set_defaults(func=cmd_predict)
+
+    p = sub.add_parser("history", help="snapshot projections and update the match log")
+    p.set_defaults(func=cmd_history)
 
     p = sub.add_parser("markets", help="compare model vs Polymarket prediction markets")
     p.add_argument("--gameweek", type=int, default=None)

@@ -13,6 +13,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pl_predict.config import OUT_DIR, PROJECT_ROOT  # noqa: E402
+from pl_predict.history import MATCH_LOG, scoreboard  # noqa: E402
 
 SITE_DIR = PROJECT_ROOT / "site"
 
@@ -101,6 +102,53 @@ def fixture_rows(matches: pd.DataFrame) -> str:
     return "\n".join(rows)
 
 
+def history_section() -> str:
+    parts = []
+    if (OUT_DIR / "history.png").exists():
+        parts.append(
+            '<img class="dash" src="history.png" alt="Weekly evolution of '
+            'title and relegation probabilities">')
+
+    if MATCH_LOG.exists():
+        log = pd.read_csv(MATCH_LOG)
+        played = log[log["outcome"].notna()].sort_values("kickoff_utc")
+        board = scoreboard(log)
+        if board:
+            parts.append(
+                f'<p class="sub">Frozen pre-match predictions scored on '
+                f'{board["n"]} played matches: '
+                f'<strong>{board["accuracy"]:.0%}</strong> correct picks · '
+                f'log loss <strong>{board["log_loss"]:.3f}</strong> · '
+                f'Brier <strong>{board["brier"]:.3f}</strong></p>')
+        if not played.empty:
+            last_gw = int(played["gameweek"].max())
+            rows = []
+            for r in played[played["gameweek"] == last_gw].itertuples():
+                probs = {"H": r.p_home, "D": r.p_draw, "A": r.p_away}
+                pick = max(probs, key=probs.get)
+                hit = "✓" if pick == r.outcome else "✗"
+                rows.append(
+                    f"<tr><td class=team>{r.HomeTeam} v {r.AwayTeam}</td>"
+                    f"<td>{pct(r.p_home)}</td><td>{pct(r.p_draw)}</td>"
+                    f"<td>{pct(r.p_away)}</td>"
+                    f"<td>{int(r.FTHG)}–{int(r.FTAG)}</td><td>{hit}</td></tr>")
+            parts.append(f"""
+  <h3 style="font-size:1rem;margin:1.2rem 0 0.5rem">Gameweek {last_gw} —
+  predicted vs actual</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th class=team>fixture</th><th>home</th><th>draw</th>
+    <th>away</th><th>result</th><th>pick</th></tr></thead>
+    <tbody>{''.join(rows)}</tbody>
+  </table></div>""")
+
+    if not parts:
+        return ""
+    return ('\n  <h2>Prediction history</h2>\n  <p class="sub">Snapshots are '
+            "taken weekly; match predictions freeze at kickoff, so the model "
+            "is judged on what it said before the game.</p>\n  "
+            + "\n".join(parts))
+
+
 def main():
     def read_pref(preferred, fallback):
         p = OUT_DIR / preferred
@@ -153,6 +201,8 @@ def main():
        alt="Prediction dashboard: expected points, title and relegation probabilities, next-gameweek outcome probabilities">
 {fixtures_section}
 
+{history_section()}
+
   <h2>Projected final table</h2>
   <div class="tablewrap"><table>
     <thead><tr><th>#</th><th class=team>team</th><th>xPts</th><th>xGD</th>
@@ -173,9 +223,9 @@ def main():
 
     SITE_DIR.mkdir(exist_ok=True)
     (SITE_DIR / "index.html").write_text(html)
-    png = OUT_DIR / "predictions_2026_27.png"
-    if png.exists():
-        shutil.copy(png, SITE_DIR / "predictions_2026_27.png")
+    for name in ("predictions_2026_27.png", "history.png"):
+        if (OUT_DIR / name).exists():
+            shutil.copy(OUT_DIR / name, SITE_DIR / name)
     print(f"wrote {SITE_DIR / 'index.html'}")
 
 

@@ -52,7 +52,26 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m pl_predict transfers          # live transfer-window activity per club
 .venv/bin/python -m pl_predict simulate --market-implied   # Elo calibrated to Polymarket
 ODDS_API_KEY=... .venv/bin/python -m pl_predict predict    # adds live bookmaker odds + blend
+.venv/bin/python -m pl_predict simulate --squad-adjust     # transfer-window Elo offsets
+.venv/bin/python -m pl_predict history                     # snapshot + match-prediction log
 ```
+
+**Squad-level signals in the model.** `predict` applies per-club Elo
+adjustments by default: net transfer-window quality (last-season FPL points
+moved in/out, capped ±40 Elo) plus a penalty for currently injured/suspended
+players weighted by their last-season points (capped 30 Elo); `--raw` disables
+both. `simulate --squad-adjust` applies the transfer offsets season-long as a
+transparent, market-free alternative to `--market-implied` — the two must not
+be stacked, since the market already prices transfers in. Both scales are
+modest heuristics, and arrivals from abroad count 0 by construction.
+
+**Prediction history.** `history` writes a weekly snapshot of the projected
+table to `history/projections/` and maintains `history/match_predictions.csv`,
+where each fixture's probabilities update until kickoff and then freeze — the
+model is judged on what it said before the game. The daily CI run commits
+`history/` back to the repo and the site shows the probability evolution, last
+gameweek's predictions vs. results, and a running scoreboard (accuracy, log
+loss, Brier).
 
 `--market-implied` iteratively nudges team Elo ratings until simulated title
 odds match the Polymarket champion market, then re-simulates all 380 fixtures —
