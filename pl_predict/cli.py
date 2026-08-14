@@ -42,13 +42,13 @@ def cmd_simulate(args):
         offsets = market_implied_offsets(ctx)
         suffix = "_market_implied"
     elif args.squad_adjust:
-        from .data_sources.squads import squad_elo_offsets
+        from .squad_model import squad_elo_offsets
 
-        offsets = squad_elo_offsets()
+        offsets = squad_elo_offsets("season", ctx.ratings)
         suffix = "_squad_adjusted"
         shown = {t: round(o) for t, o in sorted(offsets.items(), key=lambda x: -x[1])
                  if abs(o) >= 1}
-        print(f"transfer-window Elo offsets: {shown}")
+        print(f"player-level squad Elo offsets: {shown}")
 
     match_probs, table = simulate_season(n_sims=args.sims, ctx=ctx,
                                          elo_offsets=offsets)
@@ -65,19 +65,19 @@ def cmd_predict(args):
     from .data_sources.weather import kickoff_weather
     from .simulate import match_probabilities
 
+    from .simulate import build_context
+
+    ctx = build_context()
     offsets = None
     if not args.raw:
-        from .data_sources.squads import injury_elo_penalties, squad_elo_offsets
+        from .squad_model import squad_elo_offsets
 
-        transfers = squad_elo_offsets()
-        injuries = injury_elo_penalties()
-        offsets = {t: transfers.get(t, 0.0) + injuries.get(t, 0.0)
-                   for t in set(transfers) | set(injuries)}
+        offsets = squad_elo_offsets("match", ctx.ratings)
         notable = {t: round(o) for t, o in sorted(offsets.items(), key=lambda x: x[1])
-                   if abs(o) >= 10}
-        print(f"squad adjustments applied (transfers + current injuries), "
-              f"largest: {notable}  [--raw to disable]")
-    fixtures, _, _ = match_probabilities(elo_offsets=offsets)
+                   if abs(o) >= 15}
+        print(f"player-level squad adjustments applied (roster quality, form, "
+              f"availability), largest: {notable}  [--raw to disable]")
+    fixtures, _, _ = match_probabilities(ctx, elo_offsets=offsets)
     upcoming = fixtures[~fixtures["finished"]]
     gw = args.gameweek or int(upcoming["gameweek"].min())
     sel = upcoming[upcoming["gameweek"] == gw].copy()
@@ -102,6 +102,38 @@ def cmd_predict(args):
         cols += ["book_H", "book_D", "book_A", "blend_H", "blend_D", "blend_A"]
     with pd.option_context("display.float_format", lambda v: f"{v:.2f}"):
         print(f"Gameweek {gw}\n" + sel[cols].to_string(index=False))
+
+
+def cmd_squad(args):
+    from .simulate import build_context
+    from .squad_model import calibrate_pts_to_elo, current_roster, squad_strength
+
+    calibrate_pts_to_elo(verbose=True)
+    ratings = build_context().ratings
+    season = squad_strength("season", ratings)[
+        ["squad_pts", "implied_elo", "current_elo", "elo_offset"]].rename(
+        columns={"squad_pts": "season_pts", "elo_offset": "season_adj"})
+    match = squad_strength("match", ratings)[["squad_pts", "elo_offset"]].rename(
+        columns={"squad_pts": "match_pts", "elo_offset": "match_adj"})
+    table = season.join(match)
+    with pd.option_context("display.float_format", lambda v: f"{v:.0f}"):
+        print("\nSquad strength (top-15 expected FPL points; match horizon "
+              "discounts injuries/suspensions):")
+        print(table.to_string())
+
+    if args.team:
+        roster = current_roster()
+        team = roster[roster["team_name"].str.lower() == args.team.lower()]
+        if team.empty:
+            print(f"\nunknown team: {args.team}")
+            return
+        cols = ["web_name", "now_cost", "pts_prev", "form", "ep_next",
+                "status", "avail", "value_match", "news"]
+        print(f"\n{args.team} — top players by match value:")
+        with pd.option_context("display.float_format", lambda v: f"{v:.1f}",
+                               "display.max_colwidth", 40):
+            print(team.sort_values("value_match", ascending=False)
+                  .head(args.top)[cols].to_string(index=False))
 
 
 def cmd_history(args):
@@ -193,6 +225,11 @@ def main():
 
     p = sub.add_parser("history", help="snapshot projections and update the match log")
     p.set_defaults(func=cmd_history)
+
+    p = sub.add_parser("squad", help="player-level squad strength per team")
+    p.add_argument("--team", default=None, help="show this team's player detail")
+    p.add_argument("--top", type=int, default=18)
+    p.set_defaults(func=cmd_squad)
 
     p = sub.add_parser("markets", help="compare model vs Polymarket prediction markets")
     p.add_argument("--gameweek", type=int, default=None)

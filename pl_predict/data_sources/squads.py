@@ -47,46 +47,6 @@ def last_season_players() -> pd.DataFrame:
     return players[["code", "web_name", "team_name", "total_points"]]
 
 
-# Heuristic scales for turning FPL-point flows into Elo. Deliberately modest:
-# the signal understates clubs buying from abroad (those arrivals carry 0 pts).
-TRANSFER_PTS_PER_ELO = 12.0
-TRANSFER_ELO_CAP = 40.0
-INJURY_PTS_PER_ELO = 10.0
-INJURY_ELO_CAP = 30.0
-STATUS_WEIGHT = {"i": 1.0, "u": 1.0, "s": 1.0, "d": 0.5}
-
-
-def squad_elo_offsets() -> dict[str, float]:
-    """Season-long Elo offset per club from net transfer-window quality flow.
-
-    A transparent, market-free alternative to the Polymarket calibration
-    (which already prices transfers in — do not stack the two).
-    """
-    summary, _ = transfer_activity()
-    return {
-        r.team: max(-TRANSFER_ELO_CAP,
-                    min(TRANSFER_ELO_CAP, r.net_pts / TRANSFER_PTS_PER_ELO))
-        for r in summary.itertuples()
-    }
-
-
-def injury_elo_penalties() -> dict[str, float]:
-    """Short-horizon Elo penalty per club for currently unavailable players,
-    weighted by their last-season FPL points. Meant for upcoming-match
-    predictions, not season-long simulation."""
-    now = current_players()
-    prev = last_season_players()[["code", "total_points"]].rename(
-        columns={"total_points": "pts_prev"})
-    merged = now.merge(prev, on="code", how="left")
-    merged["pts_prev"] = merged["pts_prev"].fillna(0)
-    out: dict[str, float] = {}
-    for team, group in merged.groupby("team_name"):
-        weighted = sum(r.pts_prev * STATUS_WEIGHT.get(r.status, 0.0)
-                       for r in group.itertuples() if r.status != "a")
-        out[team] = -min(INJURY_ELO_CAP, weighted / INJURY_PTS_PER_ELO)
-    return out
-
-
 def transfer_activity() -> tuple[pd.DataFrame, pd.DataFrame]:
     """(per-club window summary, individual moves), from last-season roster diff.
 

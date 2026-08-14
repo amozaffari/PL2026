@@ -56,14 +56,21 @@ ODDS_API_KEY=... .venv/bin/python -m pl_predict predict    # adds live bookmaker
 .venv/bin/python -m pl_predict history                     # snapshot + match-prediction log
 ```
 
-**Squad-level signals in the model.** `predict` applies per-club Elo
-adjustments by default: net transfer-window quality (last-season FPL points
-moved in/out, capped ±40 Elo) plus a penalty for currently injured/suspended
-players weighted by their last-season points (capped 30 Elo); `--raw` disables
-both. `simulate --squad-adjust` applies the transfer offsets season-long as a
-transparent, market-free alternative to `--market-implied` — the two must not
-be stacked, since the market already prices transfers in. Both scales are
-modest heuristics, and arrivals from abroad count 0 by construction.
+**Player-level squad model** (`pl_predict/squad_model.py`, `squad` command).
+Team strength is built bottom-up from the full current roster: each player is
+valued at last season's FPL points; players with no PL history (foreign
+signings, promoted-club squads) are valued from their FPL price via a
+per-position regression; in-season, values blend 30% current form. Team
+strength is the top-15 sum, and the points→Elo conversion is *calibrated* by
+regressing end-of-season Elo on squad points across 140 historical
+team-seasons (R² ≈ 0.83) — not an invented scale. The resulting rating
+*shrinks* each club's Elo 40% toward its squad-implied level (capped ±75)
+rather than adding on top, since Elo already measures strength. `predict`
+applies the match horizon (availability/chance-of-playing discounts) by
+default (`--raw` disables); `simulate --squad-adjust` applies the season
+horizon as a market-free alternative to `--market-implied` (never stack the
+two). Known limits: promoted squads are undervalued (price-only estimates,
+hence the cap) and FPL points are an attack-tilted quality proxy.
 
 **Prediction history.** `history` writes a weekly snapshot of the projected
 table to `history/projections/` and maintains `history/match_predictions.csv`,
