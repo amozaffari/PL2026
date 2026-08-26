@@ -24,8 +24,12 @@ KEY_COLS = ["HomeTeam", "AwayTeam"]
 
 
 def _read_output(preferred: str, fallback: str) -> tuple[pd.DataFrame, bool]:
-    path = OUT_DIR / preferred
-    return pd.read_csv(path if path.exists() else OUT_DIR / fallback), path.exists()
+    """Prefer the market-calibrated file, but never a stale one: if the plain
+    file is newer (e.g. the calibration step failed this run), use it."""
+    pref, fall = OUT_DIR / preferred, OUT_DIR / fallback
+    use_pref = pref.exists() and (
+        not fall.exists() or pref.stat().st_mtime >= fall.stat().st_mtime)
+    return pd.read_csv(pref if use_pref else fall), use_pref
 
 
 def snapshot_projection(now: pd.Timestamp | None = None) -> bool:
@@ -56,6 +60,9 @@ def update_match_log(now: pd.Timestamp | None = None) -> pd.DataFrame:
     if MATCH_LOG.exists():
         log = pd.read_csv(MATCH_LOG)
         log["kickoff_utc"] = pd.to_datetime(log["kickoff_utc"], utc=True)
+        # An all-empty string column round-trips through CSV as float64 NaN,
+        # and pandas 3 then refuses string assignments into it.
+        log = log.astype({"outcome": "object", "pred_date": "object"})
         log = log.set_index(KEY_COLS)
     else:
         log = pd.DataFrame(columns=["gameweek", "kickoff_utc", *PROB_COLS,
