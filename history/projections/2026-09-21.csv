@@ -1,0 +1,21 @@
+date,team,exp_points,exp_gd,p_champion,p_top4,p_top6,p_relegation,median_position,source
+2026-09-21,Arsenal,77.0,34.9,0.4913,0.9599,0.9921,0.0,2,market_implied
+2026-09-21,Man City,75.7,31.7,0.3906,0.9426,0.9896,0.0,2,market_implied
+2026-09-21,Liverpool,65.2,19.6,0.0448,0.5671,0.8174,0.0003,4,market_implied
+2026-09-21,Chelsea,63.9,15.7,0.0331,0.4867,0.7721,0.0003,5,market_implied
+2026-09-21,Brighton,62.6,22.0,0.0231,0.4321,0.7191,0.0005,5,market_implied
+2026-09-21,Man United,60.0,14.8,0.0117,0.2834,0.5803,0.0019,6,market_implied
+2026-09-21,Leeds,55.5,5.9,0.003,0.1175,0.3254,0.0096,8,market_implied
+2026-09-21,Brentford,53.9,5.3,0.0015,0.087,0.2554,0.0143,9,market_implied
+2026-09-21,Bournemouth,50.9,1.9,0.0004,0.0385,0.1511,0.0363,10,market_implied
+2026-09-21,Everton,49.2,-4.8,0.0,0.0242,0.0956,0.0578,11,market_implied
+2026-09-21,Newcastle,48.4,-7.6,0.0002,0.0186,0.0763,0.0733,12,market_implied
+2026-09-21,Nott'm Forest,47.2,-5.8,0.0002,0.0135,0.0643,0.098,13,market_implied
+2026-09-21,Ipswich,47.1,-10.6,0.0001,0.0093,0.052,0.1044,13,market_implied
+2026-09-21,Hull,45.4,-10.3,0.0,0.0073,0.0354,0.1472,14,market_implied
+2026-09-21,Aston Villa,44.8,-11.8,0.0,0.0057,0.0331,0.1676,14,market_implied
+2026-09-21,Sunderland,43.6,-12.8,0.0,0.0036,0.0213,0.2171,15,market_implied
+2026-09-21,Coventry,41.6,-19.2,0.0,0.0024,0.0121,0.3186,16,market_implied
+2026-09-21,Crystal Palace,38.9,-21.5,0.0,0.0004,0.0042,0.4684,17,market_implied
+2026-09-21,Fulham,38.2,-17.3,0.0,0.0002,0.0031,0.4906,17,market_implied
+2026-09-21,Tottenham,32.6,-29.8,0.0,0.0,0.0001,0.7938,19,market_implied
